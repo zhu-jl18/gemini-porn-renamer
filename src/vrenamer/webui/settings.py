@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     candidates_per_style: int = 1
     total_candidates: int = 5
 
+    # 日志目录配置
+    log_dir: str = "logs"
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

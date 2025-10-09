@@ -59,6 +59,7 @@ notepad .env  # 编辑填入实际配置
   - **`openai_compat`**（推荐）：OpenAI 兼容接口，自动拼接 `/v1beta/openai`
   - **`gemini_native`**：Gemini 原生接口，使用 `/v1beta/models/{model}:generateContent`
 - `MODEL_FLASH`、`MODEL_PRO`：使用的模型名称
+- `LOG_DIR`：日志目录（默认 `logs`），存储运行日志和重命名记录
 
 **GPT-Load 接口详细说明**：参考 [docs/gptload-api.md](./gptload-api.md)
 

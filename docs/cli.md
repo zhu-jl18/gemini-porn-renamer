@@ -28,6 +28,23 @@ notepad .env  # 填入实际配置
 
 ## 命令速查
 
+### 交互式 CLI（推荐）
+```powershell
+# 扫描目录并逐个处理视频
+.\.venv\Scripts\vrenamer.exe "X:\Videos"
+
+# 或者使用 Python 运行
+.\.venv\Scripts\python.exe -m vrenamer.cli.interactive "X:\Videos"
+```
+
+功能特点：
+- 自动递归扫描所有视频文件
+- 检测乱码文件名并提示处理
+- 逐个展示视频信息
+- 提供交互菜单：跳过、手动输入、AI 生成、退出
+- AI 生成时使用配置的命名风格
+- 处理完成后显示统计摘要
+
 ### 单视频分析（dry-run 默认开启）
 ```powershell
 .\.venv\Scripts\python.exe -m vrenamer.cli.main run "X:\Videos\test.mp4" --n 5
