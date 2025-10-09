@@ -1,0 +1,164 @@
+# 命名风格配置文件
+# 用于定义不同的命名风格，AI 会根据这些风格生成候选名称
+
+# 风格定义
+styles:
+  # 风格1: 中文描述性（优雅、含蓄）
+  chinese_descriptive:
+    name: "中文描述性"
+    description: "优雅含蓄的中文描述，注重场景和氛围"
+    language: "zh"
+    format: "{场景/氛围描述}"
+    examples:
+      - "温泉旅馆的诱惑"
+      - "午后的秘密时光"
+      - "海边别墅的邂逅"
+      - "雨夜的禁忌关系"
+      - "办公室的加班秘密"
+    prompt_template: |
+      生成优雅含蓄的中文描述，注重场景氛围。
+      格式：{场景/氛围描述}
+      要求：
+      - 10-15个汉字
+      - 不要露骨词汇
+      - 突出场景和氛围
+      - 有想象空间
+  
+  # 风格2: 场景+角色（具体描述）
+  scene_role:
+    name: "场景+角色"
+    description: "场景与角色类型结合，更具体的描述"
+    language: "zh"
+    format: "{场景}_{角色类型}"
+    examples:
+      - "温泉旅馆_美丽人妻"
+      - "深夜办公室_女上司"
+      - "按摩店_新人技师"
+      - "健身房_瑜伽教练"
+      - "图书馆_清纯学生"
+    prompt_template: |
+      生成场景与角色类型结合的命名。
+      格式：{场景}_{角色类型}
+      要求：
+      - 场景具体明确
+      - 角色有特征
+      - 用下划线分隔
+  
+  # 风格3: 角色+场景+动作（详细）
+  role_scene_action:
+    name: "角色+场景+动作"
+    description: "角色、场景、动作三要素完整描述"
+    language: "zh"
+    format: "{角色类型}在{场景}的{动作/事件}"
+    examples:
+      - "人妻在温泉旅馆的秘密"
+      - "护士在医院值班的夜晚"
+      - "女教师放学后的补习"
+      - "邻家姐姐的午后来访"
+      - "瑜伽教练的私人课程"
+    prompt_template: |
+      生成包含角色、场景、动作的完整描述。
+      格式：{角色类型}在{场景}的{动作/事件}
+      要求：
+      - 三要素齐全
+      - 叙事流畅
+      - 15-25个汉字
+  
+  # 风格4: P站风格（英文，直接）
+  pornhub_style:
+    name: "P站风格"
+    description: "Pornhub 风格，英文直接描述"
+    language: "en"
+    format: "{Adjective} {Role} {Action} in {Scene}"
+    examples:
+      - "Hot MILF seduced in hotel"
+      - "Sexy nurse after night shift"
+      - "Beautiful wife cheating at home"
+      - "Young teacher private lesson"
+      - "Asian babe massage therapy"
+    prompt_template: |
+      Generate Pornhub-style titles in English.
+      Format: {Adjective} {Role} {Action} in {Scene}
+      Requirements:
+      - Direct and explicit
+      - 4-8 words
+      - Include adjective (Hot/Sexy/Beautiful)
+      - Action verb
+      - Specific scene
+  
+  # 风格5: 简洁标题（短小精悍）
+  concise:
+    name: "简洁标题"
+    description: "简短精悍，3-6个字"
+    language: "zh"
+    format: "{核心关键词}"
+    examples:
+      - "温泉诱惑"
+      - "午夜秘密"
+      - "禁忌关系"
+      - "邻家少妇"
+      - "加班夜晚"
+    prompt_template: |
+      生成简洁的标题，突出核心。
+      格式：{核心关键词}
+      要求：
+      - 3-6个汉字
+      - 一个核心概念
+      - 有吸引力
+  
+  # 风格6: 带演员名（可选演员）
+  with_actor:
+    name: "场景+演员"
+    description: "场景描述加演员名（如果识别出）"
+    language: "zh"
+    format: "{场景描述}_{演员名}"
+    examples:
+      - "温泉旅馆的诱惑_明日花绮罗"
+      - "午后的秘密时光_波多野结衣"
+      - "办公室加班_三上悠亚"
+      - "海边别墅_桥本有菜"
+      - "深夜便利店_天使萌"
+    prompt_template: |
+      生成场景描述并附加演员名（如果有）。
+      格式：{场景描述}_{演员名}
+      要求：
+      - 场景描述 8-12 个汉字
+      - 如果识别不出演员，只输出场景描述
+      - 用下划线分隔
+
+# 默认配置
+default:
+  # 默认同时生成的风格（按顺序）
+  selected_styles:
+    - chinese_descriptive
+    - scene_role
+    - pornhub_style
+    - concise
+  
+  # 每种风格生成的候选数
+  candidates_per_style: 1
+  
+  # 总候选数
+  total_candidates: 5
+  
+  # 是否包含演员名
+  include_actor: false
+  
+  # 文件名最大长度
+  max_length: 80
+  
+  # 非法字符替换
+  illegal_chars_replacement: "_"
+
+# 用户自定义风格示例
+# custom_styles:
+#   my_style:
+#     name: "我的风格"
+#     description: "自定义描述"
+#     language: "zh"
+#     format: "{自定义格式}"
+#     examples:
+#       - "示例1"
+#       - "示例2"
+#     prompt_template: |
+#       你的提示词...

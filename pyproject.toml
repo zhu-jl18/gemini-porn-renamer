@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vrenamer"
+version = "0.0.1"
+description = "Single-video renamer with Gemini (CLI/WebUI)"
+requires-python = ">=3.10"
+readme = "AGENTS.md"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+packages = [
+  "vrenamer",
+  "vrenamer.cli",
+  "vrenamer.llm",
+  "vrenamer.webui",
+  "vrenamer.webui.services",
+]
