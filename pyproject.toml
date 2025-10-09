@@ -9,12 +9,17 @@ description = "Single-video renamer with Gemini (CLI/WebUI)"
 requires-python = ">=3.10"
 readme = "AGENTS.md"
 
+[project.scripts]
+vrenamer = "vrenamer.cli.interactive:main"
+vrenamer-cli = "vrenamer.cli.main:main"
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 packages = [
   "vrenamer",
   "vrenamer.cli",
   "vrenamer.llm",
+  "vrenamer.naming",
   "vrenamer.webui",
   "vrenamer.webui.services",
 ]
