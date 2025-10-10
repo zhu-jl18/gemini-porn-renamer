@@ -155,7 +155,7 @@ class InteractiveCLI:
         try:
             # 抽帧
             console.print("  [1/3] 抽帧...")
-            frames_dir = await pipeline.sample_frames(video_path)
+            frame_result = await pipeline.sample_frames(video_path)
 
             # 分析
             console.print("  [2/3] AI 分析...")
@@ -192,7 +192,11 @@ class InteractiveCLI:
                 console.print("[red]无效输入[/]")
 
         except Exception as e:
+            import traceback
             console.print(f"[red]❌ AI 处理失败：{e}[/]")
+            console.print(f"[dim]错误类型: {type(e).__name__}[/]")
+            console.print("[dim]详细堆栈:[/]")
+            console.print(f"[dim]{traceback.format_exc()}[/]")
 
     async def _generate_candidates(self, tags: dict) -> list:
         """生成命名候选."""

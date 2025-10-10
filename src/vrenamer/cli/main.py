@@ -26,7 +26,7 @@ def _short_hash(p: Path) -> str:
     return h[:8]
 
 
-@app.command("run")
+@app.command("run", hidden=True)  # 隐藏，但保留兼容性
 def run_cli(
     video: Path = typer.Argument(..., exists=True, dir_okay=False, readable=True, help="视频文件路径"),
     n: int = typer.Option(5, "--n", min=1, max=10, help="候选数量"),
@@ -47,7 +47,7 @@ def run_cli(
         console=console,
     ) as progress:
         t1 = progress.add_task("抽帧", total=None)
-        frames_dir = asyncio.run(pipeline.sample_frames(video))
+        frame_result = asyncio.run(pipeline.sample_frames(video))
         progress.update(t1, completed=1)
         progress.stop_task(t1)
 
@@ -57,7 +57,12 @@ def run_cli(
         progress.stop_task(t2)
 
         t3 = progress.add_task("合成任务提示词", total=None)
-        task_prompts = compose_task_prompts(frames_dir, transcript, custom_prompt)
+        task_prompts = compose_task_prompts(
+            frame_result.directory,
+            transcript,
+            custom_prompt,
+            frames=frame_result.frames,
+        )
         progress.update(t3, completed=1)
         progress.stop_task(t3)
 
@@ -65,7 +70,7 @@ def run_cli(
         if dry_run:
             tags = asyncio.run(pipeline.analyze_tasks_stub())
         else:
-            tags = asyncio.run(pipeline.analyze_tasks(frames_dir, task_prompts, settings))
+            tags, _ = asyncio.run(pipeline.analyze_tasks(frame_result, task_prompts, settings))
         progress.update(t4, completed=1)
         progress.stop_task(t4)
 

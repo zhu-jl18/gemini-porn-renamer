@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import base64
+import json
 import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import httpx
+import aiohttp
 
 
 class GeminiClient:
@@ -23,7 +24,11 @@ class GeminiClient:
         self.timeout = timeout
 
     def _headers(self) -> Dict[str, str]:
-        return {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
+        return {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+            "Accept-Encoding": "identity",  # 明确禁用压缩
+        }
 
     async def classify_json(
         self,
@@ -54,10 +59,14 @@ class GeminiClient:
                 "contents": [{"role": "user", "parts": parts}],
                 "generation_config": {"temperature": temperature, **({} if not extra else extra)},
             }
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            r = await client.post(url, headers=self._headers(), json=body)
-            r.raise_for_status()
-            data = r.json()
+        # 使用 aiohttp，禁用自动解压缩（GPT-Load 的 gzip 头有问题）
+        timeout = aiohttp.ClientTimeout(total=self.timeout)
+        async with aiohttp.ClientSession(timeout=timeout, auto_decompress=False) as session:
+            async with session.post(url, headers=self._headers(), json=body) as resp:
+                resp.raise_for_status()
+                # 读取原始字节，手动解码
+                raw_bytes = await resp.read()
+                data = json.loads(raw_bytes.decode("utf-8"))
             if self.transport == "openai_compat":
                 # OpenAI-compatible: choices[0].message.content
                 return (data.get("choices", [{}])[0].get("message", {}).get("content") or "")
@@ -97,10 +106,14 @@ class GeminiClient:
                 "contents": [{"role": "user", "parts": [{"text": user_text}]}],
                 "generation_config": {"temperature": temperature},
             }
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            r = await client.post(url, headers=self._headers(), json=body)
-            r.raise_for_status()
-            data = r.json()
+        # 使用 aiohttp，禁用自动解压缩（GPT-Load 的 gzip 头有问题）
+        timeout = aiohttp.ClientTimeout(total=self.timeout)
+        async with aiohttp.ClientSession(timeout=timeout, auto_decompress=False) as session:
+            async with session.post(url, headers=self._headers(), json=body) as resp:
+                resp.raise_for_status()
+                # 读取原始字节，手动解码
+                raw_bytes = await resp.read()
+                data = json.loads(raw_bytes.decode("utf-8"))
             if self.transport == "openai_compat":
                 return (data.get("choices", [{}])[0].get("message", {}).get("content") or "")
             else:

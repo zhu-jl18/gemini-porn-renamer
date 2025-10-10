@@ -36,6 +36,28 @@ notepad .env
 
 完整文档索引: [docs/README.md](docs/README.md)
 
+## 🧠 单视频分析流程
+
+```mermaid
+flowchart TD
+    A[输入视频文件] --> B[ffprobe 获取时长]
+    B --> C[FFmpeg 自适应抽帧\n目标 32-96 帧]
+    C --> D[去重与均匀抽取\n保留代表性画面]
+    D --> E[按提示词构建帧批\n每批 3-8 张]
+    E --> F{并行分类任务}
+    F -->|角色原型| G1[Gemini classify_json]
+    F -->|脸部可见性| G2[Gemini classify_json]
+    F -->|场景类型| G3[Gemini classify_json]
+    F -->|姿势标签| G4[Gemini classify_json]
+    G1 --> H[parse_json_loose 聚合标签]
+    G2 --> H
+    G3 --> H
+    G4 --> H
+    H --> I[命名提示生成]
+    I --> J[Gemini name_candidates / 命名风格并行]
+    J --> K[CLI 交互选择\n支持改名与回滚]
+```
+
 ## 📄 许可证
 
 本项目仅供个人学习和研究使用。

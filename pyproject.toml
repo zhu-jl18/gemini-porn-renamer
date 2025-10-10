@@ -10,8 +10,9 @@ requires-python = ">=3.10"
 readme = "AGENTS.md"
 
 [project.scripts]
-vrenamer = "vrenamer.cli.interactive:main"
-vrenamer-cli = "vrenamer.cli.main:main"
+vrenamer = "vrenamer.main:main"
+vrenamer-scan = "vrenamer.cli.interactive:main"
+vrenamer-single = "vrenamer.cli.main:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
