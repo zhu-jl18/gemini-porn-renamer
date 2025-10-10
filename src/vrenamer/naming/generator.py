@@ -40,14 +40,14 @@ class NamingGenerator:
         self,
         llm_client: GeminiClient,
         style_config: NamingStyleConfig,
-        model: str = "gemini-2.0-flash-exp",
+        model: str,
     ):
         """初始化生成器.
 
         Args:
             llm_client: LLM 客户端
             style_config: 风格配置
-            model: 使用的模型名称
+            model: 使用的模型名称（从 Settings.model_pro 传入）
         """
         self.llm = llm_client
         self.config = style_config
@@ -123,6 +123,10 @@ class NamingGenerator:
         system_prompt = self._build_system_prompt(style_def, n_candidates)
         user_prompt = self._build_user_prompt(analysis, style_def)
 
+        # 打印调用信息（可选：通过日志系统）
+        print(f"  → 调用 {self.model} 生成 [{style_def.name}] 风格...")
+        print(f"    提示词长度: {len(system_prompt) + len(user_prompt)} 字符")
+
         # 调用 LLM
         response = await self.llm.name_candidates(
             model=self.model,
@@ -132,8 +136,12 @@ class NamingGenerator:
             json_array=True,
         )
 
+        print(f"    响应长度: {len(response)} 字符")
+        print(f"    原始响应: {response[:150]}..." if len(response) > 150 else f"    原始响应: {response}")
+
         # 解析响应
         names = self._parse_response(response, n_candidates)
+        print(f"    ✓ 解析出 {len(names)} 个候选")
 
         # 构建候选对象
         candidates = []

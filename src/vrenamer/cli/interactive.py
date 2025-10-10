@@ -104,10 +104,10 @@ class InteractiveCLI:
     def _show_menu(self) -> str:
         """显示操作菜单并获取用户选择."""
         console.print("\n[bold cyan]请选择操作：[/]")
-        console.print("  [1] 跳过 (s)")
-        console.print("  [2] 手动输入新名称 (r)")
-        console.print("  [3] 调用 AI 生成名称 (a)")
-        console.print("  [q] 退出")
+        console.print("  1. 跳过           (输入 1 或 s)")
+        console.print("  2. 手动输入新名称 (输入 2 或 r)")
+        console.print("  3. AI 生成名称    (输入 3 或 a)")
+        console.print("  q. 退出           (输入 q)")
 
         while True:
             choice = Prompt.ask("\n选择", default="1").lower()
@@ -154,16 +154,77 @@ class InteractiveCLI:
 
         try:
             # 抽帧
-            console.print("  [1/3] 抽帧...")
+            console.print("\n[bold yellow]━━━ 步骤 1/4: 视频抽帧 ━━━[/]")
             frame_result = await pipeline.sample_frames(video_path)
+            console.print(f"  ✓ 抽取帧数: [green]{len(frame_result.frames)}[/] 帧")
+            console.print(f"  ✓ 保存位置: [dim]{frame_result.directory}[/]")
 
-            # 分析
-            console.print("  [2/3] AI 分析...")
-            tags = await pipeline.analyze_tasks_stub()  # 使用 stub 测试，实际应调用真实 API
+            # 显示部分帧文件名
+            if frame_result.frames:
+                sample_frames = frame_result.frames[:3]
+                console.print(f"  ✓ 示例帧: [dim]{', '.join(f.name for f in sample_frames)}...[/]")
+
+            # 转录（如果需要）
+            console.print("\n[bold yellow]━━━ 步骤 2/4: 音频转录 (跳过) ━━━[/]")
+            transcript = pipeline.extract_transcript(self.settings, video_path)
+            if transcript:
+                console.print(f"  ✓ 转录长度: {len(transcript)} 字符")
+            else:
+                console.print("  ⊘ 未启用音频转录")
+
+            # AI 分析标签
+            console.print("\n[bold yellow]━━━ 步骤 3/4: AI 多模态分析 ━━━[/]")
+            console.print(f"  → 使用模型: [cyan]{self.settings.model_flash}[/]")
+            console.print(f"  → 并发数: [cyan]{self.settings.max_concurrency}[/]")
+
+            # 生成任务提示词
+            from vrenamer.webui.services.prompting import compose_task_prompts
+            task_prompts = compose_task_prompts(
+                frame_result.directory,
+                transcript,
+                "",  # user_prompt
+                frames=frame_result.frames,
+            )
+            console.print(f"  → 分析任务数: [cyan]{len(task_prompts)}[/]")
+
+            # 显示任务列表
+            for idx, task_key in enumerate(task_prompts.keys(), 1):
+                console.print(f"    {idx}. {task_key}")
+
+            # 定义进度回调
+            def progress_callback(task_key: str, status: str, result: dict):
+                if status == "start":
+                    console.print(f"    ▶ [cyan]{task_key}[/]: 开始处理 ({result['frames']} 帧)...")
+                elif status == "done":
+                    labels = result['parsed'].get('labels', ['未知'])
+                    console.print(f"    ✓ [green]{task_key}[/]: {', '.join(labels)} [{result['progress']}]")
+                    console.print(f"      [dim]原始响应: {result['raw_response']}[/]")
+                elif status == "error":
+                    console.print(f"    ✗ [red]{task_key}[/]: 错误 - {result['error']} [{result['progress']}]")
+
+            # 调用真实 API
+            console.print("\n  [cyan]正在调用 Gemini Flash API（并发处理）...[/]")
+            tags, batches = await pipeline.analyze_tasks(frame_result, task_prompts, self.settings, progress_callback)
+
+            # 显示最终汇总
+            console.print("\n  [green]✓ 所有任务完成，最终结果：[/]")
+            for task_key, labels in tags.items():
+                console.print(f"    • {task_key}: [yellow]{', '.join(labels)}[/]")
 
             # 生成候选名称
-            console.print("  [3/3] 生成候选名称...")
+            console.print("\n[bold yellow]━━━ 步骤 4/4: 生成命名候选 ━━━[/]")
+            console.print(f"  → 使用模型: [cyan]{self.settings.model_pro}[/]")
+            console.print(f"  → 命名风格: [cyan]{', '.join(self.settings.get_style_ids())}[/]")
+
+            console.print("\n  [cyan]正在生成候选名称...[/]")
+            console.print(f"  → 输入标签: [dim]{tags}[/]")
             candidates = await self._generate_candidates(tags)
+            console.print(f"  [green]✓ 生成 {len(candidates)} 个候选名称[/]")
+
+            # 显示每个风格的生成详情
+            console.print("\n  [cyan]各风格生成详情：[/]")
+            for c in candidates:
+                console.print(f"    • [{c['style_name']}] {c['filename']}")
 
             if not candidates:
                 console.print("[red]未能生成候选名称[/]")

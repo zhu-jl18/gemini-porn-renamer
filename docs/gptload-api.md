@@ -33,7 +33,7 @@ http://localhost:3001/proxy/free/v1beta/openai/chat/completions
       "role": "assistant"
     }
   }],
-  "model": "gemini-2.0-flash-exp",
+  "model": "gemini-2.5-flash",
   "usage": {
     "completion_tokens": 100,
     "prompt_tokens": 50,
@@ -82,8 +82,8 @@ http://localhost:3001/proxy/free/v1beta/models/{model}:generateContent
 ```env
 GEMINI_BASE_URL=http://localhost:3001/proxy/free
 LLM_TRANSPORT=openai_compat
-MODEL_FLASH=gemini-2.0-flash-exp
-MODEL_PRO=gemini-2.0-flash-thinking-exp
+MODEL_FLASH=gemini-2.5-flash
+MODEL_PRO=gemini-2.5-pro
 GEMINI_API_KEY=在此填写你的GPT-Load密钥
 ```
 
@@ -95,8 +95,8 @@ GEMINI_API_KEY=在此填写你的GPT-Load密钥
 ```env
 GEMINI_BASE_URL=http://localhost:3001/proxy/free
 LLM_TRANSPORT=gemini_native
-MODEL_FLASH=gemini-2.0-flash-exp
-MODEL_PRO=gemini-2.0-flash-thinking-exp
+MODEL_FLASH=gemini-2.5-flash
+MODEL_PRO=gemini-2.5-pro
 GEMINI_API_KEY=在此填写你的GPT-Load密钥
 ```
 

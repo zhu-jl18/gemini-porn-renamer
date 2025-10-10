@@ -106,8 +106,8 @@ GEMINI_API_KEY=sk-xxx
 LLM_TRANSPORT=openai_compat
 
 # 模型配置
-MODEL_FLASH=gemini-2.0-flash-exp
-MODEL_PRO=gemini-2.0-flash-thinking-exp
+MODEL_FLASH=gemini-2.5-flash
+MODEL_PRO=gemini-2.5-pro
 
 # 并发与超时
 MAX_CONCURRENCY=32
