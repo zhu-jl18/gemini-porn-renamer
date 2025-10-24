@@ -76,14 +76,14 @@ notepad .env  # 填入实际配置
 ## 工作流程
 
 ```
-1. 抽帧        → ffmpeg 每5秒抽取一帧（最多24帧）
-2. 转录(可选)   → faster-whisper 提取音频字幕
-3. 任务提示词   → compose_task_prompts 生成标签任务
-4. LLM 标签    → Flash 模型多模态分析
-5. 命名提示词   → compose_name_prompt 组合标签
-6. 生成候选    → Pro 模型生成 n 个文件名
-7. 用户选择    → 终端交互选择
-8. 执行改名    → 可选，需 --rename 参数
+1. 异步获取时长     → _probe_duration 调用 ffprobe 并缓存可执行路径
+2. 自适应抽帧       → ffmpeg 动态 fps，最多 96 帧
+3. 去重与采样       → MD5 + pHash 去重，均匀抽取代表帧
+4. 任务提示词       → compose_task_prompts 生成分类任务
+5. 标签分析         → analyze_tasks 复用帧批次，单批 5 帧并遵守并发上限
+6. 命名生成         → NamingGenerator + GeminiLLMAdapter，多风格候选 + JSON 回退
+7. 用户交互         → 终端选择风格候选，可保留审计记录
+8. 执行改名         → 可选，需 --rename，生成 rename_audit.jsonl
 ```
 
 ## 进度可视化
@@ -148,3 +148,4 @@ REQUEST_TIMEOUT=30
 解决：
 - Windows：下载 https://ffmpeg.org/download.html 并添加到 PATH
 - 或使用 Chocolatey：`choco install ffmpeg`
+- Pipeline 会缓存第一次探测到的路径，若更换安装位置请重启终端或进程

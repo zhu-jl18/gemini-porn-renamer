@@ -75,6 +75,9 @@ pip install -e .
 
 # 回滚
 .\.venv\Scripts\python.exe -m vrenamer.cli.main rollback logs/rename_audit.jsonl
+
+# 单元测试（涵盖 Pipeline / LLM 适配器）
+.\.venv\Scripts\python.exe -m pytest -q
 ```
 
 详细使用参考：[docs/cli.md](docs/cli.md)
@@ -86,6 +89,7 @@ pip install -e .
 - 缩进：4 空格
 - 命名：`snake_case`（函数/变量）、`PascalCase`（类）、`UPPER_SNAKE`（常量）
 - Type hints：必须使用（Python 3.10+）
+- 外部命令：优先使用 `asyncio.to_thread` 或 `asyncio.create_subprocess_exec`，并缓存可执行路径避免重复探测
 
 ### 文件命名规范
 

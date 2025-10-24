@@ -38,3 +38,23 @@
 ### 测试
 - 单元测试：	ests/test_naming_styles.py（5 个测试全部通过）
 - 覆盖：配置加载、风格验证、文件名清理、风格获取
+
+---
+
+## 2025-10-24: Pipeline 异步化与 LLM 适配器
+
+### 背景
+原先 `sample_frames` 在异步函数中直接调用 `subprocess.run`，阻塞事件循环；`generate_names_with_styles` 也直接把 `GeminiClient` 传入 `NamingGenerator`，导致缺少 `BaseLLMClient.generate` 实现并在 `--use-styles` 时抛出异常。
+
+### 决策
+1. **异步外部命令**：使用 `asyncio.create_subprocess_exec` 获取时长，`asyncio.to_thread` 执行 ffmpeg，并缓存 `ffmpeg/ffprobe` 路径。
+2. **LLM 适配器**：新增 `GeminiLLMAdapter`，实现 `BaseLLMClient` 接口并封装 `classify_json` / `name_candidates`。
+3. **帧分配策略**：`_build_frame_batches` 引入最小/最大批次与小样本轮询，避免每个任务重复全量抽帧。
+
+### 影响
+- CLI dry-run 响应更流畅，可同时执行多个视频不互相阻塞。
+- 风格命名在开启 `--use-styles` 时稳定运行，支持非法字符清理与 JSON 回退。
+- 日志新增帧利用率指标，便于观测并发效果。
+
+### 测试
+- `pytest -q` 全绿，新增 `tests/test_pipeline.py` 覆盖适配器与批次逻辑。

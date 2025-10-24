@@ -3,16 +3,26 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Sequence
 
+from asyncio.subprocess import PIPE, create_subprocess_exec
+
 from vrenamer.webui.settings import Settings
 from vrenamer.webui.services.prompting import compose_task_prompts, compose_name_prompt
+from vrenamer.llm.adapter import GeminiLLMAdapter
 from vrenamer.llm.client import GeminiClient
 from vrenamer.llm.json_utils import parse_json_loose
 from vrenamer.naming import NamingGenerator, NamingStyleConfig
+
+
+_FFMPEG_PATH: Optional[str] = None
+_FFPROBE_PATH: Optional[str] = None
+_FFMPEG_LOCK = asyncio.Lock()
+_FFPROBE_LOCK = asyncio.Lock()
 
 
 @dataclass
@@ -45,43 +55,53 @@ async def run_single(video_path: Path, user_prompt: str, n_candidates: int, sett
     }
 
 
-def _check_ffmpeg() -> str:
+async def _check_ffmpeg() -> str:
     """检查 ffmpeg 是否可用，返回可执行文件路径."""
-    import shutil
-    
-    ffmpeg_path = shutil.which("ffmpeg")
-    if not ffmpeg_path:
-        raise RuntimeError(
-            "未找到 ffmpeg 命令！\n\n"
-            "请安装 ffmpeg：\n"
-            "  Windows: 从 https://ffmpeg.org/download.html 下载，或使用 chocolatey: choco install ffmpeg\n"
-            "  或使用 scoop: scoop install ffmpeg\n"
-            "  Linux: sudo apt install ffmpeg  或  sudo yum install ffmpeg\n"
-            "  macOS: brew install ffmpeg\n\n"
-            "安装后请确保 ffmpeg 在 PATH 环境变量中。"
-        )
-    return ffmpeg_path
+    global _FFMPEG_PATH
+    if _FFMPEG_PATH:
+        return _FFMPEG_PATH
+    async with _FFMPEG_LOCK:
+        if _FFMPEG_PATH:
+            return _FFMPEG_PATH
+        ffmpeg_path = await asyncio.to_thread(shutil.which, "ffmpeg")
+        if not ffmpeg_path:
+            raise RuntimeError(
+                "未找到 ffmpeg 命令！\n\n"
+                "请安装 ffmpeg：\n"
+                "  Windows: 从 https://ffmpeg.org/download.html 下载，或使用 chocolatey: choco install ffmpeg\n"
+                "  或使用 scoop: scoop install ffmpeg\n"
+                "  Linux: sudo apt install ffmpeg  或  sudo yum install ffmpeg\n"
+                "  macOS: brew install ffmpeg\n\n"
+                "安装后请确保 ffmpeg 在 PATH 环境变量中。"
+            )
+        _FFMPEG_PATH = ffmpeg_path
+        return ffmpeg_path
 
 
-def _check_ffprobe() -> str:
+async def _check_ffprobe() -> str:
     """检查 ffprobe 是否可用，返回可执行文件路径."""
-    import shutil
-    
-    ffprobe_path = shutil.which("ffprobe")
-    if not ffprobe_path:
-        raise RuntimeError(
-            "未找到 ffprobe 命令！\n\n"
-            "ffprobe 通常随 ffmpeg 一起安装。\n"
-            "请参考 ffmpeg 的安装说明。"
-        )
-    return ffprobe_path
+    global _FFPROBE_PATH
+    if _FFPROBE_PATH:
+        return _FFPROBE_PATH
+    async with _FFPROBE_LOCK:
+        if _FFPROBE_PATH:
+            return _FFPROBE_PATH
+        ffprobe_path = await asyncio.to_thread(shutil.which, "ffprobe")
+        if not ffprobe_path:
+            raise RuntimeError(
+                "未找到 ffprobe 命令！\n\n"
+                "ffprobe 通常随 ffmpeg 一起安装。\n"
+                "请参考 ffmpeg 的安装说明。"
+            )
+        _FFPROBE_PATH = ffprobe_path
+        return ffprobe_path
 
 
 async def sample_frames(video_path: Path) -> FrameSampleResult:
     """抽帧并返回代表性帧列表."""
 
     # 检查 ffmpeg 是否可用
-    ffmpeg_cmd = _check_ffmpeg()
+    ffmpeg_cmd = await _check_ffmpeg()
 
     frames_root = video_path.parent / "frames"
     frames_dir = frames_root / video_path.stem
@@ -95,7 +115,7 @@ async def sample_frames(video_path: Path) -> FrameSampleResult:
             continue
 
     # 获取视频时长
-    duration = _probe_duration(video_path)
+    duration = await _probe_duration(video_path)
     fps = _decide_sampling_fps(duration)
     target_max = 96
 
@@ -118,7 +138,13 @@ async def sample_frames(video_path: Path) -> FrameSampleResult:
 
     # 执行抽帧命令
     try:
-        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        result = await asyncio.to_thread(
+            subprocess.run,
+            cmd,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
         print(f"  ✓ ffmpeg 执行成功")
         if result.stderr:
             print(f"  [dim]stderr: {result.stderr[:200]}[/]")
@@ -188,7 +214,7 @@ async def analyze_tasks(
         timeout=settings.request_timeout,
     )
     frames = frame_result.frames
-    batches = _build_frame_batches(frames, list(task_prompts.keys()))
+    frame_assignments = _build_frame_batches(frames, list(task_prompts.keys()))
 
     semaphore = asyncio.Semaphore(settings.max_concurrency or 1)
     completed_count = 0
@@ -197,9 +223,9 @@ async def analyze_tasks(
     async def _one(key: str, prompt: str, batch: List[Path]) -> tuple[str, Any]:
         nonlocal completed_count
 
-        # 使用全部可用帧
-        available_frames = list(frames)
-        print(f"    [INFO] {key}: 使用全部 {len(available_frames)} 帧进行分批分析")
+        # 使用预分配的帧；若为空则回退为全量
+        available_frames = list(batch) if batch else list(frames)
+        print(f"    [INFO] {key}: 使用 {len(available_frames)} 帧进行分批分析")
 
         # 通知开始
         if progress_callback:
@@ -212,11 +238,15 @@ async def analyze_tasks(
 
         # 计算批次：每批5帧（Gemini限制）
         IMAGES_PER_CALL = 5
-        batches = [shuffled_frames[i:i+IMAGES_PER_CALL] for i in range(0, len(shuffled_frames), IMAGES_PER_CALL)]
-        num_calls = len(batches)
+        frame_chunks = [
+            shuffled_frames[i : i + IMAGES_PER_CALL]
+            for i in range(0, len(shuffled_frames), IMAGES_PER_CALL)
+        ]
+        num_calls = len(frame_chunks)
+        frames_used = sum(len(chunk) for chunk in frame_chunks)
 
-        print(f"    [INFO] {key}: 打乱后分成 {num_calls} 批，每批 {IMAGES_PER_CALL} 帧（最后一批可能少于5帧）")
-        print(f"    [INFO] {key}: 总计将使用 {sum(len(b) for b in batches)} 帧（100%覆盖）")
+        print(f"    [INFO] {key}: 打乱后分成 {num_calls} 批，每批 ≤ {IMAGES_PER_CALL} 帧")
+        print(f"    [INFO] {key}: 总计将使用 {frames_used} 帧（覆盖率 {frames_used}/{len(available_frames)}）")
 
         # 定义单批次调用函数
         async def _call_one_batch(batch_idx: int, frame_batch: List[Path]) -> Dict[str, Any]:
@@ -244,7 +274,7 @@ async def analyze_tasks(
         # 并发执行所有批次调用
         try:
             sub_results = await asyncio.gather(
-                *[_call_one_batch(idx, batch) for idx, batch in enumerate(batches)],
+                *[_call_one_batch(idx, chunk) for idx, chunk in enumerate(frame_chunks)],
                 return_exceptions=False
             )
 
@@ -276,7 +306,8 @@ async def analyze_tasks(
                 "labels": final_labels,
                 "confidence": avg_confidence,
                 "total_calls": num_calls,
-                "total_frames_available": len(available_frames)
+                "total_frames_available": len(available_frames),
+                "total_frames_used": frames_used,
             }
 
             print(f"    [SUCCESS] {key}: 汇总 {num_calls} 次调用 → {final_labels} (置信度: {avg_confidence:.2f})")
@@ -306,12 +337,12 @@ async def analyze_tasks(
                 )
             return key, {"labels": ["错误"], "confidence": 0.0, "error": str(e)}
 
-    tasks = [_one(key, prompt, batches.get(key, [])) for key, prompt in task_prompts.items()]
+    tasks = [_one(key, prompt, frame_assignments.get(key, [])) for key, prompt in task_prompts.items()]
     results_pairs = await asyncio.gather(*tasks)
     results: Dict[str, Any] = {key: value for key, value in results_pairs}
 
     tags = {k: (results[k].get("labels") or ["未知"]) for k in results}
-    return tags, batches
+    return tags, frame_assignments
 
 
 async def generate_names(name_prompt: str, settings: Settings, n: int) -> list:
@@ -368,10 +399,11 @@ async def generate_names_with_styles(
         transport=settings.llm_transport,
         timeout=settings.request_timeout,
     )
+    llm_adapter = GeminiLLMAdapter(client, model_flash=settings.model_flash, model_pro=settings.model_pro)
 
     # 创建生成器
     generator = NamingGenerator(
-        llm_client=client,
+        llm_client=llm_adapter,
         style_config=style_config,
         model=settings.model_pro,
     )
@@ -409,27 +441,28 @@ async def store_feedback(selected_name: str, context: str) -> None:
         f.write(json.dumps({"name": selected_name, "context": context}, ensure_ascii=False) + "\n")
 
 
-def _probe_duration(video_path: Path) -> float:
+async def _probe_duration(video_path: Path) -> float:
     """获取视频时长（秒）."""
-    ffprobe_cmd = _check_ffprobe()
+    ffprobe_cmd = await _check_ffprobe()
     
     try:
-        result = subprocess.run(
-            [
-                ffprobe_cmd,
-                "-v",
-                "error",
-                "-show_entries",
-                "format=duration",
-                "-of",
-                "default=noprint_wrappers=1:nokey=1",
-                str(video_path),
-            ],
-            check=True,
-            capture_output=True,
-            text=True,
+        proc = await create_subprocess_exec(
+            ffprobe_cmd,
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            str(video_path),
+            stdout=PIPE,
+            stderr=PIPE,
         )
-        return max(1.0, float(result.stdout.strip()))
+        stdout, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            err_text = stderr.decode("utf-8", errors="ignore").strip()
+            raise RuntimeError(f"ffprobe exit {proc.returncode}: {err_text}")
+        return max(1.0, float(stdout.decode("utf-8").strip()))
     except Exception as e:
         print(f"  [警告] 无法获取视频时长: {e}，使用默认值 180 秒")
         return 180.0
@@ -591,6 +624,17 @@ def _build_frame_batches(
 
     # 策略4: 计算每个任务的目标帧数
     total_frames = len(shuffled)
+
+    # 小样本回退：总帧数不足以满足最小批次需求时按轮询平均分配
+    if total_frames and total_frames < min_batch * num_tasks:
+        print(f"  [INFO] 小样本回退：总帧数 {total_frames} < 需求 {min_batch * num_tasks}，采用轮询分配")
+        idx = 0
+        for frame in shuffled:
+            key = keys[idx % num_tasks]
+            batches[key].append(frame)
+            idx += 1
+        return batches
+
     target_per_task = total_frames // num_tasks  # 平均分配
 
     # 确保在范围内

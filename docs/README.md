@@ -50,6 +50,11 @@
   - 接口选择依据
   - 历史决策演进
 
+- **[concurrent-strategy-explained.md](concurrent-strategy-explained.md)** - 并发策略详解
+  - 帧分配与小样本回退
+  - Semaphore 调度与日志指标
+  - 调优建议与关联测试
+
 ### 协作规范
 - **[../AGENTS.md](../AGENTS.md)** - AI Agent 协作准则（根目录）
   - 项目目标和技术约束

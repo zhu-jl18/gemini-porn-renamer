@@ -5,7 +5,7 @@
 ## 前置要求
 
 - Python 3.10+（建议 3.10 或 3.11，避免编译问题）
-- ffmpeg（视频帧抽取）
+- ffmpeg & ffprobe（Pipeline 会异步检测并缓存可执行路径）
 - Git
 - Windows PowerShell（Windows） 或 Bash（Linux/macOS）
 
@@ -70,6 +70,10 @@ notepad .env  # 编辑填入实际配置
 
 # 查看 CLI 帮助
 .\.venv\Scripts\python.exe -m vrenamer.cli.main --help
+
+# 确认 ffmpeg / ffprobe 可用（应返回版本信息）
+ffmpeg -version
+ffprobe -version
 ```
 
 ## 常用命令速查
@@ -130,3 +134,4 @@ deactivate
 3. `.env` 文件包含敏感信息，**禁止提交到 Git**
 4. 首次运行必须使用 `--dry-run` 模式验证
 5. 定期更新依赖：`pip install --upgrade -r requirements.txt`
+6. ffmpeg/ffprobe 路径在首次调用时会被缓存，如重新安装需重启终端/进程
