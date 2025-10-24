@@ -1,0 +1,40 @@
+# 分析子任务配置
+# 定义视频分析的各个子任务
+
+tasks:
+  # 角色原型识别
+  role_archetype:
+    name: 角色原型
+    description: 识别视频中的角色类型
+    batch_size: 5  # 每批次的帧数（Gemini 限制）
+    prompt_file: role_archetype.yaml
+    enabled: true
+  
+  # 脸部可见性判断
+  face_visibility:
+    name: 脸部可见性
+    description: 判断脸部是否可见
+    batch_size: 5
+    prompt_file: face_visibility.yaml
+    enabled: true
+  
+  # 场景类型识别
+  scene_type:
+    name: 场景类型
+    description: 识别场景类型
+    batch_size: 5
+    prompt_file: scene_type.yaml
+    enabled: true
+  
+  # 姿势标签识别
+  positions:
+    name: 姿势标签
+    description: 识别姿势和动作
+    batch_size: 5
+    prompt_file: positions.yaml
+    enabled: true
+
+# 任务执行顺序
+# concurrent: 并发执行所有任务（推荐）
+# sequential: 顺序执行任务
+execution_order: concurrent

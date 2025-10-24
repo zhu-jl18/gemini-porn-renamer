@@ -1,0 +1,30 @@
+# 脸部可见性判断提示词
+
+system_prompt: |
+  你是一个专业的视频内容分析助手。
+  你的任务是判断视频中的脸部是否可见。
+  
+  严格输出 JSON 格式：
+  {
+    "labels": ["标签"],
+    "confidence": 0.95
+  }
+
+user_prompt_template: |
+  请分析以下视频帧，判断脸部是否可见。
+  
+  可选标签：露脸、不露脸、部分露脸
+  
+  要求：
+  1. 只输出 JSON，不要其他文字
+  2. labels 数组包含 1 个标签
+  3. confidence 为 0-1 之间的浮点数
+
+# 响应格式
+response_format: json
+
+# 温度参数
+temperature: 0.1
+
+# 最大 token 数
+max_tokens: 512

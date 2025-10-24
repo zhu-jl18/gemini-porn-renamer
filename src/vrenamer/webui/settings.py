@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     model_flash: str = "gemini-flash-latest"
     model_pro: str = "gemini-2.5-pro"
     llm_transport: str = "openai_compat"  # openai_compat | gemini_native
-    max_concurrency: int = 8
+    max_concurrency: int = 64  # 提升默认并发数，充分利用 GPT-Load 资源
     request_timeout: int = 30
     retry: int = 3
 

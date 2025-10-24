@@ -1,7 +1,10 @@
 # Environment & Secrets
 .env
 .venv/
+venv/
+env/
 *.key
+*.pem
 
 # Logs & Data
 logs/
@@ -18,19 +21,66 @@ __pycache__/
 build/
 dist/
 *.egg-info/
+.eggs/
+*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.cover
+.hypothesis/
 
-# IDEs
+# IDEs & Editors
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
+.project
+.pydevproject
+.settings/
 
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
 
 # Temporary
 tmp/
 temp/
 *.tmp
+*.bak
+*.backup
+
+# Video frames (generated)
+frames/
+**/frames/
+
+# Test outputs
+test_output/
+test_results/
+
+# Documentation builds
+docs/_build/
+docs/.doctrees/
+
+# AI tool caches (already removed but keep in gitignore)
+.crush/
+.serena/
+.kiro/cache/
+
+# Package manager
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# Environments
+.env.local
+.env.*.local
 

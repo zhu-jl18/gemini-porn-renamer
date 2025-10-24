@@ -63,21 +63,56 @@ class GeminiClient:
         timeout = aiohttp.ClientTimeout(total=self.timeout)
         async with aiohttp.ClientSession(timeout=timeout, auto_decompress=False) as session:
             async with session.post(url, headers=self._headers(), json=body) as resp:
+                # [DEBUG] HTTP 响应状态
+                print(f"[DEBUG] classify_json - HTTP Status: {resp.status}")
+                print(f"[DEBUG] classify_json - Response Headers: {dict(resp.headers)}")
+
                 resp.raise_for_status()
+
                 # 读取原始字节，手动解码
                 raw_bytes = await resp.read()
-                data = json.loads(raw_bytes.decode("utf-8"))
+                print(f"[DEBUG] classify_json - Raw Bytes Length: {len(raw_bytes)}")
+
+                try:
+                    data = json.loads(raw_bytes.decode("utf-8"))
+                    print(f"[DEBUG] classify_json - JSON Keys: {list(data.keys())}")
+                except json.JSONDecodeError as e:
+                    print(f"[ERROR] classify_json - JSON 解析失败: {e}")
+                    print(f"[ERROR] classify_json - Raw Content (first 500): {raw_bytes[:500]}")
+                    raise
+
             if self.transport == "openai_compat":
                 # OpenAI-compatible: choices[0].message.content
-                return (data.get("choices", [{}])[0].get("message", {}).get("content") or "")
+                choices = data.get("choices", [])
+                print(f"[DEBUG] classify_json - Choices count: {len(choices)}")
+
+                if not choices:
+                    print(f"[ERROR] classify_json - 空 choices 数组！完整响应: {json.dumps(data, indent=2, ensure_ascii=False)[:1000]}")
+                    return ""
+
+                message = choices[0].get("message", {})
+                print(f"[DEBUG] classify_json - Message keys: {list(message.keys())}")
+
+                content = message.get("content") or ""
+                print(f"[DEBUG] classify_json - Content length: {len(content)}")
+                print(f"[DEBUG] classify_json - Content preview: {content[:200]}")
+
+                return content
             else:
                 # Gemini native: candidates[0].content.parts[].text
                 cands = data.get("candidates", [])
+                print(f"[DEBUG] classify_json - Candidates count: {len(cands)}")
+
                 if not cands:
+                    print(f"[ERROR] classify_json - 空 candidates 数组！完整响应: {json.dumps(data, indent=2, ensure_ascii=False)[:1000]}")
                     return ""
+
                 parts = cands[0].get("content", {}).get("parts", [])
                 texts = [p.get("text", "") for p in parts if isinstance(p, dict)]
-                return "\n".join([t for t in texts if t])
+                result = "\n".join([t for t in texts if t])
+                print(f"[DEBUG] classify_json - Result length: {len(result)}")
+
+                return result
 
     async def name_candidates(
         self,
@@ -110,19 +145,51 @@ class GeminiClient:
         timeout = aiohttp.ClientTimeout(total=self.timeout)
         async with aiohttp.ClientSession(timeout=timeout, auto_decompress=False) as session:
             async with session.post(url, headers=self._headers(), json=body) as resp:
+                # [DEBUG] HTTP 响应状态
+                print(f"[DEBUG] name_candidates - HTTP Status: {resp.status}")
+                print(f"[DEBUG] name_candidates - Response Headers: {dict(resp.headers)}")
+
                 resp.raise_for_status()
+
                 # 读取原始字节，手动解码
                 raw_bytes = await resp.read()
-                data = json.loads(raw_bytes.decode("utf-8"))
+                print(f"[DEBUG] name_candidates - Raw Bytes Length: {len(raw_bytes)}")
+
+                try:
+                    data = json.loads(raw_bytes.decode("utf-8"))
+                    print(f"[DEBUG] name_candidates - JSON Keys: {list(data.keys())}")
+                except json.JSONDecodeError as e:
+                    print(f"[ERROR] name_candidates - JSON 解析失败: {e}")
+                    print(f"[ERROR] name_candidates - Raw Content (first 500): {raw_bytes[:500]}")
+                    raise
+
             if self.transport == "openai_compat":
-                return (data.get("choices", [{}])[0].get("message", {}).get("content") or "")
+                choices = data.get("choices", [])
+                print(f"[DEBUG] name_candidates - Choices count: {len(choices)}")
+
+                if not choices:
+                    print(f"[ERROR] name_candidates - 空 choices 数组！完整响应: {json.dumps(data, indent=2, ensure_ascii=False)[:1000]}")
+                    return ""
+
+                content = choices[0].get("message", {}).get("content") or ""
+                print(f"[DEBUG] name_candidates - Content length: {len(content)}")
+                print(f"[DEBUG] name_candidates - Content preview: {content[:200]}")
+
+                return content
             else:
                 cands = data.get("candidates", [])
+                print(f"[DEBUG] name_candidates - Candidates count: {len(cands)}")
+
                 if not cands:
+                    print(f"[ERROR] name_candidates - 空 candidates 数组！完整响应: {json.dumps(data, indent=2, ensure_ascii=False)[:1000]}")
                     return ""
+
                 parts = cands[0].get("content", {}).get("parts", [])
                 texts = [p.get("text", "") for p in parts if isinstance(p, dict)]
-                return "\n".join([t for t in texts if t])
+                result = "\n".join([t for t in texts if t])
+                print(f"[DEBUG] name_candidates - Result length: {len(result)}")
+
+                return result
 
     def _make_messages(self, user_text: str, images: List[Path], system_prompt: str) -> list:
         content = [{"type": "text", "text": user_text}]

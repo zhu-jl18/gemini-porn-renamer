@@ -197,62 +197,114 @@ async def analyze_tasks(
     async def _one(key: str, prompt: str, batch: List[Path]) -> tuple[str, Any]:
         nonlocal completed_count
 
-        # 调试信息：打印帧分配情况
-        print(f"    [DEBUG] {key}: batch有 {len(batch)} 帧, 总帧数 {len(frames)}")
-
-        # 确定使用哪些帧
-        if batch:
-            payload = batch
-        else:
-            payload = frames[:8]
-
-        # 确保至少有 3 帧
-        if len(payload) < 3 and frames:
-            payload = _evenly_sample(frames, 3)
-
-        print(f"    [DEBUG] {key}: 最终使用 {len(payload)} 帧")
+        # 使用全部可用帧
+        available_frames = list(frames)
+        print(f"    [INFO] {key}: 使用全部 {len(available_frames)} 帧进行分批分析")
 
         # 通知开始
         if progress_callback:
-            progress_callback(key, "start", {"frames": len(payload)})
+            progress_callback(key, "start", {"frames": len(available_frames)})
 
-        async with semaphore:
-            try:
-                raw = await client.classify_json(
-                    model=settings.model_flash,
-                    system_prompt="严格输出JSON，不得多余文本。",
-                    user_text=prompt,
-                    images=payload,
-                    response_json=True,
-                    temperature=0.1,
-                    extra={"max_output_tokens": 512},
+        # 打乱帧顺序（每个子任务独立打乱，增加多样性）
+        import random
+        shuffled_frames = available_frames.copy()
+        random.shuffle(shuffled_frames)
+
+        # 计算批次：每批5帧（Gemini限制）
+        IMAGES_PER_CALL = 5
+        batches = [shuffled_frames[i:i+IMAGES_PER_CALL] for i in range(0, len(shuffled_frames), IMAGES_PER_CALL)]
+        num_calls = len(batches)
+
+        print(f"    [INFO] {key}: 打乱后分成 {num_calls} 批，每批 {IMAGES_PER_CALL} 帧（最后一批可能少于5帧）")
+        print(f"    [INFO] {key}: 总计将使用 {sum(len(b) for b in batches)} 帧（100%覆盖）")
+
+        # 定义单批次调用函数
+        async def _call_one_batch(batch_idx: int, frame_batch: List[Path]) -> Dict[str, Any]:
+            async with semaphore:
+                try:
+                    print(f"      [DEBUG] {key} 批次{batch_idx+1}/{num_calls}: 调用模型 ({len(frame_batch)} 帧)")
+
+                    raw = await client.classify_json(
+                        model=settings.model_flash,
+                        system_prompt="严格输出JSON，不得多余文本。",
+                        user_text=prompt,
+                        images=frame_batch,
+                        response_json=True,
+                        temperature=0.1,
+                        extra={"max_output_tokens": 512},
+                    )
+                    data = parse_json_loose(raw)
+                    result = data or {"labels": [], "confidence": 0.0}
+                    print(f"      [SUCCESS] {key} 批次{batch_idx+1}: 返回 {len(result.get('labels', []))} 个标签")
+                    return result
+                except Exception as e:
+                    print(f"      [ERROR] {key} 批次{batch_idx+1} 失败: {e}")
+                    return {"labels": [], "confidence": 0.0, "error": str(e)}
+
+        # 并发执行所有批次调用
+        try:
+            sub_results = await asyncio.gather(
+                *[_call_one_batch(idx, batch) for idx, batch in enumerate(batches)],
+                return_exceptions=False
+            )
+
+            # 汇总结果：收集所有labels并统计频率
+            from collections import Counter
+            all_labels = []
+            all_confidences = []
+
+            for result in sub_results:
+                if result and isinstance(result, dict):
+                    labels = result.get("labels", [])
+                    if labels:
+                        all_labels.extend(labels)
+                    conf = result.get("confidence", 0.0)
+                    if conf > 0:
+                        all_confidences.append(conf)
+
+            # 标签去重并按出现频率排序（取前3个最常见的）
+            if all_labels:
+                label_counts = Counter(all_labels)
+                final_labels = [label for label, count in label_counts.most_common(3)]
+            else:
+                final_labels = ["未知"]
+
+            # 计算平均置信度
+            avg_confidence = sum(all_confidences) / len(all_confidences) if all_confidences else 0.0
+
+            final_result = {
+                "labels": final_labels,
+                "confidence": avg_confidence,
+                "total_calls": num_calls,
+                "total_frames_available": len(available_frames)
+            }
+
+            print(f"    [SUCCESS] {key}: 汇总 {num_calls} 次调用 → {final_labels} (置信度: {avg_confidence:.2f})")
+
+            # 通知完成
+            completed_count += 1
+            if progress_callback:
+                progress_callback(
+                    key,
+                    "done",
+                    {
+                        "parsed": final_result,
+                        "progress": f"{completed_count}/{total_count}",
+                    },
                 )
-                data = parse_json_loose(raw)
-                safe = data or {"labels": ["未知"], "confidence": 0.0}
 
-                # 通知完成
-                completed_count += 1
-                if progress_callback:
-                    progress_callback(
-                        key,
-                        "done",
-                        {
-                            "raw_response": raw[:200] + "..." if len(raw) > 200 else raw,
-                            "parsed": safe,
-                            "progress": f"{completed_count}/{total_count}",
-                        },
-                    )
+            return key, final_result
 
-                return key, safe
-            except Exception as e:
-                completed_count += 1
-                if progress_callback:
-                    progress_callback(
-                        key,
-                        "error",
-                        {"error": str(e), "progress": f"{completed_count}/{total_count}"},
-                    )
-                return key, {"labels": ["错误"], "confidence": 0.0, "error": str(e)}
+        except Exception as e:
+            print(f"    [ERROR] {key}: 随机抽样分析失败: {e}")
+            completed_count += 1
+            if progress_callback:
+                progress_callback(
+                    key,
+                    "error",
+                    {"error": str(e), "progress": f"{completed_count}/{total_count}"},
+                )
+            return key, {"labels": ["错误"], "confidence": 0.0, "error": str(e)}
 
     tasks = [_one(key, prompt, batches.get(key, [])) for key, prompt in task_prompts.items()]
     results_pairs = await asyncio.gather(*tasks)
@@ -397,21 +449,72 @@ def _decide_sampling_fps(duration: float) -> float:
 
 
 def _deduplicate_frames(frames: Sequence[Path]) -> List[Path]:
-    seen: Dict[str, Path] = {}
+    """去重：MD5 完全相同 + pHash 内容相似."""
+    try:
+        import imagehash
+        from PIL import Image
+
+        use_phash = True
+        print(f"  [INFO] 去重算法: MD5 + pHash (汉明距离阈值 ≤ 5)")
+    except ImportError:
+        use_phash = False
+        print(f"  [WARNING] imagehash 未安装，仅使用 MD5 去重")
+
+    seen_md5: Dict[str, Path] = {}
+    seen_phash: Dict[str, Path] = {}
     unique: List[Path] = []
+    removed_count = 0
+
     for frame in frames:
         try:
+            # 1. MD5 完全去重
             digest = hashlib.md5(frame.read_bytes()).hexdigest()
-        except Exception:
+            if digest in seen_md5:
+                try:
+                    frame.unlink()
+                    removed_count += 1
+                except Exception:
+                    pass
+                continue
+
+            # 2. pHash 相似度去重（可选）
+            if use_phash:
+                try:
+                    img = Image.open(frame)
+                    phash = imagehash.phash(img)
+
+                    # 检查是否有相似帧
+                    is_similar = False
+                    for existing_hash in seen_phash.keys():
+                        distance = imagehash.hex_to_hash(existing_hash) - phash
+                        if distance <= 5:  # 汉明距离 ≤ 5 认为相似
+                            is_similar = True
+                            try:
+                                frame.unlink()
+                                removed_count += 1
+                            except Exception:
+                                pass
+                            break
+
+                    if not is_similar:
+                        seen_md5[digest] = frame
+                        seen_phash[str(phash)] = frame
+                        unique.append(frame)
+                except Exception as e:
+                    # pHash 失败，仅用 MD5
+                    print(f"  [WARNING] pHash 计算失败 {frame.name}: {e}")
+                    seen_md5[digest] = frame
+                    unique.append(frame)
+            else:
+                # 仅 MD5 去重
+                seen_md5[digest] = frame
+                unique.append(frame)
+
+        except Exception as e:
+            print(f"  [WARNING] 帧去重失败 {frame.name}: {e}")
             continue
-        if digest in seen:
-            try:
-                frame.unlink()
-            except Exception:
-                pass
-            continue
-        seen[digest] = frame
-        unique.append(frame)
+
+    print(f"  [INFO] 去重结果: 原始 {len(frames)} 帧 → 保留 {len(unique)} 帧 (移除 {removed_count} 帧)")
     return unique
 
 
@@ -441,34 +544,88 @@ def _evenly_sample(items: Sequence[Path], target: int) -> List[Path]:
     return ordered
 
 
-def _build_frame_batches(frames: Sequence[Path], keys: Sequence[str], min_batch: int = 3, max_batch: int = 8) -> Dict[str, List[Path]]:
-    """构建帧批次，为每个任务分配合适的帧."""
+def _build_frame_batches(
+    frames: Sequence[Path],
+    keys: Sequence[str],
+    min_batch: int = 15,  # 提升：旧值 3
+    max_batch: int = 20,  # 提升：旧值 8
+) -> Dict[str, List[Path]]:
+    """构建帧批次，大幅提升利用率到 70%+."""
+    import random
+
     frames = list(frames)
-    
-    print(f"  [DEBUG] _build_frame_batches: 输入 {len(frames)} 帧, {len(keys)} 个任务")
-    
+    num_tasks = len(keys)
+
+    print(f"\n  [INFO] ========== 帧分配策略 ==========")
+    print(f"  [INFO] 总帧数: {len(frames)}, 任务数: {num_tasks}")
+    print(f"  [INFO] 目标范围: 每任务 {min_batch}-{max_batch} 帧")
+
     if not frames or not keys:
-        print(f"  [DEBUG] 帧或任务为空，返回空批次")
+        print(f"  [WARNING] 帧或任务为空，返回空批次")
         return {k: [] for k in keys}
 
     batches: Dict[str, List[Path]] = {k: [] for k in keys}
-    num_batches = len(keys)
 
-    # 初始轮转分配，保证覆盖时间轴
-    for idx, frame in enumerate(frames):
-        target_key = keys[idx % num_batches]
-        batches[target_key].append(frame)
+    # 策略1: 保留首尾帧（时间轴覆盖）
+    if len(frames) >= 2:
+        first_frame = frames[0]
+        last_frame = frames[-1]
+        middle_frames = frames[1:-1]
+        print(f"  [INFO] 时间轴覆盖: 保留首帧 [{first_frame.name}] 和尾帧 [{last_frame.name}]")
+    else:
+        first_frame = frames[0] if frames else None
+        last_frame = None
+        middle_frames = []
 
-    total_frames = len(frames)
-    base = max(min_batch, min(max_batch, total_frames // num_batches or min_batch))
-    leftover = max(0, total_frames - base * num_batches)
+    # 策略2: 随机打乱中间帧（增加多样性）
+    random.shuffle(middle_frames)
+    print(f"  [INFO] 随机打乱: {len(middle_frames)} 个中间帧")
 
-    print(f"  [DEBUG] 初始分配完成，每个任务约 {base} 帧")
+    # 策略3: 重新组合帧序列
+    if first_frame and last_frame:
+        shuffled = [first_frame] + middle_frames + [last_frame]
+    elif first_frame:
+        shuffled = [first_frame] + middle_frames
+    else:
+        shuffled = middle_frames
 
+    # 策略4: 计算每个任务的目标帧数
+    total_frames = len(shuffled)
+    target_per_task = total_frames // num_tasks  # 平均分配
+
+    # 确保在范围内
+    target_per_task = max(min_batch, min(max_batch, target_per_task))
+    print(f"  [INFO] 每任务目标: {target_per_task} 帧")
+
+    # 策略5: 分配帧到各任务
     for idx, key in enumerate(keys):
-        desired = base + (1 if idx < leftover and base < max_batch else 0)
-        desired = max(min_batch, min(max_batch, desired))
-        batches[key] = _evenly_sample(batches[key], desired)
-        print(f"  [DEBUG]   {key}: {len(batches[key])} 帧")
+        start_idx = idx * target_per_task
+        end_idx = min(start_idx + target_per_task, total_frames)
+
+        batch = shuffled[start_idx:end_idx]
+
+        # 确保至少有 min_batch 帧
+        if len(batch) < min_batch and len(shuffled) >= min_batch:
+            print(f"  [WARNING] 任务 {key} 只有 {len(batch)} 帧，补充到 {min_batch} 帧")
+            batch = _evenly_sample(shuffled, min_batch)
+
+        batches[key] = batch
+        print(f"  [INFO]   ✓ {key}: {len(batch)} 帧")
+
+    # 策略6: 计算并显示利用率
+    total_used = sum(len(b) for b in batches.values())
+    utilization = (total_used / total_frames) * 100 if total_frames else 0
+
+    print(f"\n  [INFO] ========== 利用率统计 ==========")
+    print(f"  [INFO] 总帧数: {total_frames}")
+    print(f"  [INFO] 已使用: {total_used}")
+    print(f"  [INFO] 利用率: {utilization:.1f}%")
+
+    if utilization < 70:
+        print(f"  [WARNING] 利用率低于目标 70%，考虑增加 max_batch 参数")
+    else:
+        print(f"  [SUCCESS] 利用率达标！")
+
+    print(f"  [INFO] ===================================\n")
 
     return batches

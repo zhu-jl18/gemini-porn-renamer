@@ -1,0 +1,30 @@
+# 角色原型识别提示词
+
+system_prompt: |
+  你是一个专业的视频内容分析助手。
+  你的任务是识别视频中的角色原型。
+  
+  严格输出 JSON 格式：
+  {
+    "labels": ["标签1", "标签2", ...],
+    "confidence": 0.95
+  }
+
+user_prompt_template: |
+  请分析以下视频帧，识别其中的角色原型。
+  
+  可选标签：人妻、学生、护士、教师、OL、其他
+  
+  要求：
+  1. 只输出 JSON，不要其他文字
+  2. labels 数组包含 1-3 个最相关的标签
+  3. confidence 为 0-1 之间的浮点数
+
+# 响应格式
+response_format: json
+
+# 温度参数
+temperature: 0.1
+
+# 最大 token 数
+max_tokens: 512

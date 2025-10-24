@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel
 
-from vrenamer.llm.client import GeminiClient
+from vrenamer.llm.base import BaseLLMClient
 from vrenamer.naming.styles import NamingStyleConfig, StyleDefinition
 
 
@@ -38,14 +38,14 @@ class NamingGenerator:
 
     def __init__(
         self,
-        llm_client: GeminiClient,
+        llm_client: BaseLLMClient,
         style_config: NamingStyleConfig,
         model: str,
     ):
         """初始化生成器.
 
         Args:
-            llm_client: LLM 客户端
+            llm_client: LLM 客户端（支持多种后端）
             style_config: 风格配置
             model: 使用的模型名称（从 Settings.model_pro 传入）
         """
@@ -127,13 +127,14 @@ class NamingGenerator:
         print(f"  → 调用 {self.model} 生成 [{style_def.name}] 风格...")
         print(f"    提示词长度: {len(system_prompt) + len(user_prompt)} 字符")
 
-        # 调用 LLM
-        response = await self.llm.name_candidates(
-            model=self.model,
-            system_prompt=system_prompt,
-            user_text=user_prompt,
+        # 调用 LLM（使用新的统一接口）
+        # 组合系统提示词和用户提示词
+        full_prompt = f"{system_prompt}\n\n{user_prompt}"
+        response = await self.llm.generate(
+            prompt=full_prompt,
+            response_format="json",
             temperature=0.7,
-            json_array=True,
+            max_tokens=2048,
         )
 
         print(f"    响应长度: {len(response)} 字符")

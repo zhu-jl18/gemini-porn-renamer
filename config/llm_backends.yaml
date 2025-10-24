@@ -1,0 +1,22 @@
+# LLM 后端配置
+# 支持多种 LLM 后端（Gemini、OpenAI 等）
+
+backends:
+  # Gemini 后端（通过 GPT-Load 代理）
+  gemini:
+    type: gemini
+    base_url: http://localhost:3001/proxy/free
+    transport: openai_compat  # openai_compat | gemini_native
+    timeout: 30
+    retry: 3
+  
+  # OpenAI 后端（示例）
+  openai:
+    type: openai
+    base_url: https://api.openai.com/v1
+    timeout: 30
+    retry: 3
+    organization: ""  # 可选
+
+# 默认使用的后端
+default: gemini
