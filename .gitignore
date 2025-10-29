@@ -90,3 +90,6 @@ pip-delete-this-directory.txt
 
 # Internal tool cache (keep ignored)
 .giga/
+
+# Personal notes (do not track)
+随想-不要删除也不要加入git也不要读取和遵循.md
