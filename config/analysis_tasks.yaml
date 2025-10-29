@@ -1,36 +1,41 @@
 # 分析子任务配置
 # 定义视频分析的各个子任务
+#
+# batch_size 说明：
+# - Free Tier 实测：50 张图片/请求可用，建议默认 20（保守策略）
+# - 付费版升级后：可提升至 100-200/请求（官方上限 3,000）
+# - 详见：docs/decisions.md "Free Tier 限制与测试计划"
 
 tasks:
   # 角色原型识别
   role_archetype:
     name: 角色原型
     description: 识别视频中的角色类型
-    batch_size: 5  # 每批次的帧数（Gemini 限制）
+    batch_size: 20  # 每批次的帧数（Free Tier 保守策略）
     prompt_file: role_archetype.yaml
     enabled: true
-  
+
   # 脸部可见性判断
   face_visibility:
     name: 脸部可见性
     description: 判断脸部是否可见
-    batch_size: 5
+    batch_size: 20
     prompt_file: face_visibility.yaml
     enabled: true
-  
+
   # 场景类型识别
   scene_type:
     name: 场景类型
     description: 识别场景类型
-    batch_size: 5
+    batch_size: 20
     prompt_file: scene_type.yaml
     enabled: true
-  
+
   # 姿势标签识别
   positions:
     name: 姿势标签
     description: 识别姿势和动作
-    batch_size: 5
+    batch_size: 20
     prompt_file: positions.yaml
     enabled: true
 

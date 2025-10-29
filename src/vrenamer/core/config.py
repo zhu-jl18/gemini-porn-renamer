@@ -44,7 +44,29 @@ class AnalysisConfig(BaseSettings):
 
     tasks_config_path: Path = Path("config/analysis_tasks.yaml")
     prompts_dir: Path = Path("config/prompts/analysis")
-    batch_size: int = 5  # 每批次的帧数（Gemini 限制）
+    # 批次大小配置（基于 Free Tier 实测：50 张可用，建议默认 20）
+    batch_size: int = 20  # 每批次的帧数（默认值，保守策略）
+    batch_size_max: int = 50  # 最大批次大小（Free Tier 实测上限）
+
+    @field_validator("batch_size")
+    @classmethod
+    def validate_batch_size(cls, v: int, info) -> int:
+        """验证 batch_size 不超过 batch_size_max."""
+        # 注意：此时 batch_size_max 可能还未设置，需要从 info.data 获取
+        max_size = info.data.get("batch_size_max", 50)
+        if v > max_size:
+            raise ValueError(f"batch_size ({v}) cannot exceed batch_size_max ({max_size})")
+        if v < 1:
+            raise ValueError(f"batch_size ({v}) must be at least 1")
+        return v
+
+
+class TranscriptConfig(BaseSettings):
+    """字幕/音频转写配置."""
+
+    enabled: bool = False  # 默认禁用（待后续实现）
+    backend: str = "dummy"  # dummy | gemini
+    timeout: int = 60  # 音频转写超时时间（秒）
 
 
 class NamingConfig(BaseSettings):
@@ -79,6 +101,9 @@ class AppConfig(BaseSettings):
 
     # 分析配置
     analysis: AnalysisConfig = AnalysisConfig()
+
+    # 字幕/音频转写配置
+    transcript: TranscriptConfig = TranscriptConfig()
 
     # 命名配置
     naming: NamingConfig = NamingConfig()

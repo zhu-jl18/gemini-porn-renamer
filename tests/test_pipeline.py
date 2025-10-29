@@ -117,6 +117,7 @@ def test_analyze_tasks_respects_batches(tmp_path, monkeypatch):
         model_flash="flash",
         model_pro="pro",
         max_concurrency=4,
+        analysis_batch_size=20,  # 新增：从配置读取的批次大小
     )
 
     frame_result = pipeline.FrameSampleResult(directory=tmp_path, frames=frames)
@@ -126,7 +127,8 @@ def test_analyze_tasks_respects_batches(tmp_path, monkeypatch):
 
     assert all(tags[key][0] == "标签" for key in task_prompts)
     assert DummyClient.calls
-    assert max(DummyClient.calls) <= 5
+    # 批次大小从 5 改为 20，但测试只有 12 帧，所以每个任务只有 1 批次（6 帧）
+    assert max(DummyClient.calls) <= 20  # 更新：batch_size 现在是 20
     assert sum(DummyClient.calls) == sum(len(batch) for batch in batches.values())
 
 

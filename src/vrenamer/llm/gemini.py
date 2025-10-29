@@ -76,6 +76,30 @@ class GeminiClient(BaseLLMClient):
 
         # 发送请求
         self.logger.debug(f"Calling Gemini API (OpenAI format): {url}")
+        try:
+            _hdr = dict(self._headers())
+            if "Authorization" in _hdr:
+                _hdr["Authorization"] = "Bearer ***REDACTED***"
+            self.logger.debug(f"Request headers: {_hdr}")
+            # Redact base64 data for logs
+            def _redact(b):
+                try:
+                    b_copy = json.loads(json.dumps(b))
+                except Exception:
+                    return b
+                if "messages" in b_copy:
+                    for m in b_copy["messages"]:
+                        c = m.get("content")
+                        if isinstance(c, list):
+                            for item in c:
+                                if isinstance(item, dict) and item.get("type") == "image_url":
+                                    urlv = ((item.get("image_url") or {}).get("url") or "")
+                                    if isinstance(urlv, str) and urlv.startswith("data:image"):
+                                        item["image_url"]["url"] = f"data:image/jpeg;base64,<BASE64_LENGTH:{len(urlv.split(',')[-1])}>"
+                return b_copy
+            self.logger.debug(f"Request body (sanitized): {json.dumps(_redact(body))[:2000]}")
+        except Exception as _e:
+            self.logger.debug(f"Request logging failed: {_e}")
         self.logger.debug(f"Request body: model={body['model']}, temperature={temperature}, images={len(images)}")
 
         async with aiohttp.ClientSession() as session:
@@ -139,6 +163,29 @@ class GeminiClient(BaseLLMClient):
 
         # 发送请求
         self.logger.debug(f"Calling Gemini API (native format): {url}")
+        try:
+            _hdr = dict(self._headers())
+            if "Authorization" in _hdr:
+                _hdr["Authorization"] = "Bearer ***REDACTED***"
+            self.logger.debug(f"Request headers: {_hdr}")
+            # Redact base64 data for logs
+            def _redact(b):
+                try:
+                    b_copy = json.loads(json.dumps(b))
+                except Exception:
+                    return b
+                if "contents" in b_copy:
+                    for c in b_copy.get("contents", []):
+                        parts = c.get("parts") or []
+                        for p in parts:
+                            if isinstance(p, dict) and "inline_data" in p:
+                                data = (p["inline_data"] or {}).get("data")
+                                if isinstance(data, str):
+                                    p["inline_data"]["data"] = f"<BASE64_LENGTH:{len(data)}>"
+                return b_copy
+            self.logger.debug(f"Request body (sanitized): {json.dumps(_redact(body))[:2000]}")
+        except Exception as _e:
+            self.logger.debug(f"Request logging failed: {_e}")
 
         async with aiohttp.ClientSession() as session:
             async with session.post(
@@ -200,6 +247,14 @@ class GeminiClient(BaseLLMClient):
             }
 
         self.logger.debug(f"Calling Gemini API for generation: {url}")
+        try:
+            _hdr = dict(self._headers())
+            if "Authorization" in _hdr:
+                _hdr["Authorization"] = "Bearer ***REDACTED***"
+            self.logger.debug(f"Request headers: {_hdr}")
+            self.logger.debug(f"Request body preview: {json.dumps(body)[:2000]}")
+        except Exception as _e:
+            self.logger.debug(f"Request logging failed: {_e}")
 
         async with aiohttp.ClientSession() as session:
             async with session.post(

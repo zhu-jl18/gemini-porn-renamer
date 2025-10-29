@@ -150,6 +150,68 @@ A: 可以，但需在代码中明确指定。默认情况下由 `LLM_TRANSPORT` 
 ### Q: GPT-Load 键轮询如何工作？
 A: GPT-Load 内置上万个 Gemini API Key，自动负载均衡和轮询，客户端无需关心。只需设置好 `GEMINI_API_KEY`（GPT-Load 管理密钥）即可。
 
+
+## Free Tier vs 付费版限制差异（实测完成）
+
+### 图片输入限制（2025-10-29 实测）
+
+**测试环境**：
+- API Key 类型：Google AI Studio Free Tier
+- 测试工具：`test_free_tier_limits.py`
+- 测试视频：`X:\Gallery\#DDR JK王冬儿 被教导主任 换衣间 睡奸.mp4`
+
+**实测结果**：
+| 图片数量 | 结果       | 说明                     |
+| -------- | ---------- | ------------------------ |
+| 5-20 张  | ✓ 全部成功 | -                        |
+| 25 张    | ✗ 失败     | 返回空 content（非 429） |
+| 30-50 张 | ✓ 全部成功 | -                        |
+
+**关键发现**：
+1. **Free Tier 支持远超预期**：实测 50 张图片/请求成功，远高于社区传言的 10 张限制
+2. **25 张异常失败**：唯一失败点在 25 张，但 30/40/50 张均成功，说明这不是硬性上限
+3. **失败原因分析**：可能是内容过滤、Key 轮询瞬时问题或 GPT-Load 路由到不同后端
+
+**架构参数建议**：
+- **Free Tier**：
+  - 默认 `batch_size = 20`（保守策略，避开 25 张异常区）
+  - 上限 `batch_size_max = 50`（实测可用）
+- **付费版（Vertex AI）**：
+  - 官方上限：3,000-3,600 张/请求
+  - 建议起步值：100-200 张/请求
+  - 可根据网络带宽和延迟要求进一步提升
+
+**性能提升预期**（升级付费版后）：
+- 批次大小可提升 5-10 倍（20 → 100-200）
+- 总 API 调用次数减少 80-90%
+- 处理速度提升 3-5 倍（减少网络往返）
+
+### 音频转写支持（测试遇阻）
+
+**测试状态**：
+- 测试工具：`scripts/debug/test_audio_transcription.py`
+- 当前问题：gzip 解压错误导致脚本挂起
+- 待办事项：修复 gzip 处理逻辑后重新测试
+
+**临时方案**：
+- 音频转写功能暂时搁置
+- 使用占位接口 `DummyTranscriptExtractor`（返回空字符串）
+- 配置开关 `transcript.enabled = false`（默认禁用）
+
+### 验证方法
+
+**图片上限测试**（已完成）：
+```powershell
+.\.venv\Scripts\python.exe test_free_tier_limits.py --counts "5,10,20,50"
+```
+
+**音频转写测试**（待修复）：
+```powershell
+.\.venv\Scripts\python.exe scripts\debug\test_audio_transcription.py --video "X:\Gallery\sample.mp4" --transport openai_compat
+```
+
+详细测试结果参考：`docs/decisions.md` "Free Tier 限制与测试计划"
+
 ## 参考资料
 
 - GPT-Load 文档：（填入实际链接）

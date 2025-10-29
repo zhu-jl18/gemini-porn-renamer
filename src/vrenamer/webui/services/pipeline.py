@@ -17,6 +17,7 @@ from vrenamer.llm.adapter import GeminiLLMAdapter
 from vrenamer.llm.client import GeminiClient
 from vrenamer.llm.json_utils import parse_json_loose
 from vrenamer.naming import NamingGenerator, NamingStyleConfig
+from vrenamer.services.transcript import create_transcript_extractor
 
 
 _FFMPEG_PATH: Optional[str] = None
@@ -35,7 +36,7 @@ class FrameSampleResult:
 
 async def run_single(video_path: Path, user_prompt: str, n_candidates: int, settings: Settings) -> Dict[str, Any]:
     frame_result = await sample_frames(video_path)
-    transcript = extract_transcript(settings, video_path)
+    transcript = await extract_transcript(settings, video_path)  # 改为 await 调用
     task_prompts = compose_task_prompts(
         frame_result.directory,
         transcript,
@@ -174,10 +175,36 @@ async def sample_frames(video_path: Path) -> FrameSampleResult:
     return FrameSampleResult(directory=frames_dir, frames=frames)
 
 
-def extract_transcript(settings: Settings, video_path: Path) -> str:
-    # Minimal placeholder; in real impl, call faster-whisper on extracted audio
-    # ffmpeg -i input -vn -ac 1 -ar 16000 -f wav audio.wav
-    return ""
+async def extract_transcript(settings: Settings, video_path: Path) -> str:
+    """提取视频音频转写文本.
+
+    根据配置决定是否启用音频转写功能。
+    默认使用 DummyTranscriptExtractor（返回空字符串）。
+
+    Args:
+        settings: 应用设置
+        video_path: 视频文件路径
+
+    Returns:
+        转写后的文本内容（纯文本，无时间戳）
+    """
+    # 从配置读取 transcript 设置（默认禁用）
+    # 注意：settings 中暂未添加 transcript 配置，使用默认值
+    # TODO: 将 TranscriptConfig 集成到 Settings 中
+    extractor = create_transcript_extractor(
+        enabled=False,  # 默认禁用，待配置集成后从 settings 读取
+        backend="dummy",
+    )
+
+    if not extractor.is_available():
+        return ""
+
+    try:
+        return await extractor.extract(video_path)
+    except Exception as e:
+        # 转写失败不阻断主流程，记录日志并返回空字符串
+        print(f"[WARNING] 音频转写失败: {e}")
+        return ""
 
 
 async def analyze_tasks_stub() -> Dict[str, Any]:
@@ -236,16 +263,16 @@ async def analyze_tasks(
         shuffled_frames = available_frames.copy()
         random.shuffle(shuffled_frames)
 
-        # 计算批次：每批5帧（Gemini限制）
-        IMAGES_PER_CALL = 5
+        # 计算批次：从配置读取 batch_size（Free Tier 默认 20，上限 50）
+        batch_size = settings.analysis_batch_size
         frame_chunks = [
-            shuffled_frames[i : i + IMAGES_PER_CALL]
-            for i in range(0, len(shuffled_frames), IMAGES_PER_CALL)
+            shuffled_frames[i : i + batch_size]
+            for i in range(0, len(shuffled_frames), batch_size)
         ]
         num_calls = len(frame_chunks)
         frames_used = sum(len(chunk) for chunk in frame_chunks)
 
-        print(f"    [INFO] {key}: 打乱后分成 {num_calls} 批，每批 ≤ {IMAGES_PER_CALL} 帧")
+        print(f"    [INFO] {key}: 打乱后分成 {num_calls} 批，每批 ≤ {batch_size} 帧")
         print(f"    [INFO] {key}: 总计将使用 {frames_used} 帧（覆盖率 {frames_used}/{len(available_frames)}）")
 
         # 定义单批次调用函数

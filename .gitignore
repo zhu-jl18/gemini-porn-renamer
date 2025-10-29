@@ -84,3 +84,10 @@ pip-delete-this-directory.txt
 .env.local
 .env.*.local
 
+
+# AI assistants / editor configs
+.cursorrules
+.cursor/
+.windsurfrules
+.windsurf/
+.giga/

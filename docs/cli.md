@@ -45,14 +45,15 @@ notepad .env  # 填入实际配置
 - AI 生成时使用配置的命名风格
 - 处理完成后显示统计摘要
 
-### 单视频分析（dry-run 默认开启）
+### 单视频分析（支持非交互 --non-interactive）
 ```powershell
 .\.venv\Scripts\python.exe -m vrenamer.cli.main run "X:\Videos\test.mp4" --n 5
 ```
 
 参数说明：
 - `--n`：候选名称数量（1-10，默认 5）
-- `--dry-run`：模拟模式，不调用真实 LLM（默认 True）
+- `--dry-run`：模拟模式，不调用真实 LLM（默认 False）
+- `--non-interactive`：测试模式自动选择序号 1，无需交互
 - `--custom-prompt`：自定义提示词前缀
 
 ### 执行改名

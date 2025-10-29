@@ -61,6 +61,41 @@ class GeminiClient:
             }
         # 使用 aiohttp，禁用自动解压缩（GPT-Load 的 gzip 头有问题）
         timeout = aiohttp.ClientTimeout(total=self.timeout)
+        # 打印请求详情（URL、Headers、Body）
+        try:
+            _hdr = dict(self._headers())
+            if "Authorization" in _hdr:
+                _hdr["Authorization"] = "Bearer ***REDACTED***"
+            def _sanitize_body(b):
+                try:
+                    b_copy = json.loads(json.dumps(b))  # deep copy
+                except Exception:
+                    return b
+                # OpenAI 兼容：messages[].content[*].image_url.url
+                if isinstance(b_copy, dict) and "messages" in b_copy:
+                    for m in b_copy.get("messages", []):
+                        c = m.get("content")
+                        if isinstance(c, list):
+                            for item in c:
+                                if isinstance(item, dict) and item.get("type") == "image_url":
+                                    urlv = ((item.get("image_url") or {}).get("url") or "")
+                                    if isinstance(urlv, str) and urlv.startswith("data:image"):
+                                        item["image_url"]["url"] = f"data:image/jpeg;base64,<BASE64_LENGTH:{len(urlv.split(',')[-1])}>"
+                # Gemini 原生：contents[].parts[*].inline_data.data
+                if isinstance(b_copy, dict) and "contents" in b_copy:
+                    for c in b_copy.get("contents", []):
+                        parts = c.get("parts") or []
+                        for p in parts:
+                            if isinstance(p, dict) and "inline_data" in p:
+                                data = (p["inline_data"] or {}).get("data")
+                                if isinstance(data, str):
+                                    p["inline_data"]["data"] = f"<BASE64_LENGTH:{len(data)}>"
+                return b_copy
+            print(f"[DEBUG] classify_json - Request URL: {url}")
+            print(f"[DEBUG] classify_json - Request Headers: {_hdr}")
+            print(f"[DEBUG] classify_json - Request Body: {json.dumps(_sanitize_body(body))[:2000]}")
+        except Exception as _e:
+            print(f"[WARN] classify_json - Failed to log request: {_e}")
         async with aiohttp.ClientSession(timeout=timeout, auto_decompress=False) as session:
             async with session.post(url, headers=self._headers(), json=body) as resp:
                 # [DEBUG] HTTP 响应状态
@@ -143,6 +178,34 @@ class GeminiClient:
             }
         # 使用 aiohttp，禁用自动解压缩（GPT-Load 的 gzip 头有问题）
         timeout = aiohttp.ClientTimeout(total=self.timeout)
+        # 打印请求详情（URL、Headers、Body）
+        try:
+            _hdr = dict(self._headers())
+            if "Authorization" in _hdr:
+                _hdr["Authorization"] = "Bearer ***REDACTED***"
+            def _sanitize_body_nc(b):
+                try:
+                    b_copy = json.loads(json.dumps(b))
+                except Exception:
+                    return b
+                if isinstance(b_copy, dict) and "messages" in b_copy:
+                    # OpenAI 兼容
+                    pass  # name 生成的 body 不含图片，仅文本
+                if isinstance(b_copy, dict) and "contents" in b_copy:
+                    # Gemini 原生
+                    for c in b_copy.get("contents", []):
+                        parts = c.get("parts") or []
+                        for p in parts:
+                            if isinstance(p, dict) and "inline_data" in p:
+                                data = (p["inline_data"] or {}).get("data")
+                                if isinstance(data, str):
+                                    p["inline_data"]["data"] = f"<BASE64_LENGTH:{len(data)}>"
+                return b_copy
+            print(f"[DEBUG] name_candidates - Request URL: {url}")
+            print(f"[DEBUG] name_candidates - Request Headers: {_hdr}")
+            print(f"[DEBUG] name_candidates - Request Body: {json.dumps(_sanitize_body_nc(body))[:2000]}")
+        except Exception as _e:
+            print(f"[WARN] name_candidates - Failed to log request: {_e}")
         async with aiohttp.ClientSession(timeout=timeout, auto_decompress=False) as session:
             async with session.post(url, headers=self._headers(), json=body) as resp:
                 # [DEBUG] HTTP 响应状态

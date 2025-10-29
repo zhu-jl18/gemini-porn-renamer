@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     request_timeout: int = 30
     retry: int = 3
 
+    # 分析配置（基于 Free Tier 实测：50 张可用，建议默认 20）
+    analysis_batch_size: int = 20  # 每批次的帧数（Free Tier 保守策略）
+    analysis_batch_size_max: int = 50  # 最大批次大小（Free Tier 实测上限）
+
     # 命名风格配置
     naming_styles: str = "chinese_descriptive,scene_role,pornhub_style,concise"
     naming_style_config: str = "examples/naming_styles.yaml"

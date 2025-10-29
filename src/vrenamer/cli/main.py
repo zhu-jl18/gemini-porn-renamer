@@ -30,11 +30,12 @@ def _short_hash(p: Path) -> str:
 def run_cli(
     video: Path = typer.Argument(..., exists=True, dir_okay=False, readable=True, help="视频文件路径"),
     n: int = typer.Option(5, "--n", min=1, max=10, help="候选数量"),
-    dry_run: bool = typer.Option(True, help="是否跳过真实 LLM 调用（默认开启）"),
+    dry_run: bool = typer.Option(False, help="是否跳过真实 LLM 调用（默认关闭）"),
     rename: bool = typer.Option(False, help="选择后立即改名"),
     custom_prompt: str = typer.Option("", help="可选的自定义提示词"),
     use_styles: bool = typer.Option(False, "--use-styles", help="使用命名风格系统"),
     styles: str = typer.Option("", "--styles", help="指定风格（逗号分隔），为空则用配置默认值"),
+    non_interactive: bool = typer.Option(False, "--non-interactive", help="测试模式：自动选择序号 1，无需交互"),
 ):
     """分析单个视频 -> 生成候选名 -> 用户选择 -> 可选改名。"""
     settings = Settings()
@@ -52,7 +53,7 @@ def run_cli(
         progress.stop_task(t1)
 
         t2 = progress.add_task("转录(可选)", total=None)
-        transcript = pipeline.extract_transcript(settings, video)
+        transcript = asyncio.run(pipeline.extract_transcript(settings, video))
         progress.update(t2, completed=1)
         progress.stop_task(t2)
 
@@ -106,11 +107,14 @@ def run_cli(
             table.add_row(str(idx), c)
     console.print(table)
 
-    choice = typer.prompt("选择一个序号(1-{}), 或 0 跳过".format(len(candidates)), default="1")
-    try:
-        ci = int(choice)
-    except Exception:
-        ci = 0
+    if non_interactive:
+        ci = 1 if len(candidates) > 0 else 0
+    else:
+        choice = typer.prompt("选择一个序号(1-{}), 或 0 跳过".format(len(candidates)), default="1")
+        try:
+            ci = int(choice)
+        except Exception:
+            ci = 0
     if ci < 1 or ci > len(candidates):
         console.print("已跳过改名。")
         return

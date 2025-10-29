@@ -16,8 +16,11 @@ pip install httpx python-dotenv pydantic pydantic-settings typer rich
 copy .env.example .env
 notepad .env
 
-# 4. 试跑单视频流程（默认 dry-run）
-.\.venv\Scripts\python.exe -m vrenamer.cli.main run "X:\Videos\test.mp4"
+# 4. 试跑单视频流程（推荐先 --dry-run；默认真实调用）
+.\.venv\Scripts\python.exe -m vrenamer.cli.main run "X:\Videos\test.mp4" --dry-run --non-interactive
+
+# 如需真实调用（会产生真实 LLM 请求）：
+.\.venv\Scripts\python.exe -m vrenamer.cli.main run "X:\Videos\test.mp4" --non-interactive
 
 # 5. 执行回归测试（涵盖管线与风格生成）
 .\.venv\Scripts\python.exe -m pytest -q
@@ -27,16 +30,16 @@ notepad .env
 
 ## 📚 文档导航
 
-| 文档类型 | 文档名称 | 说明 |
-|---------|---------|------|
-| **核心文档** | [核心需求.md](核心需求.md) | 详细需求、技术约束、命名规范 |
-| **用户文档** | [环境搭建](docs/setup.md) | 虚拟环境、依赖安装、故障排查 |
-| | [CLI 使用](docs/cli.md) | 命令详解、参数说明、工作流程 |
-| | [GPT-Load 接口](docs/gptload-api.md) | API 接口对比和配置说明 |
-| **开发文档** | [开发路线图](docs/NEXT_STEPS.md) | 当前状态、优先级、技术选型 |
-| | [技术决策](docs/decisions.md) | 架构选型、接口决策、实现原理 |
-| **测试文档** | [测试指南](docs/testing-guide.md) | 自动化与手工测试清单 |
-| **协作规范** | [AGENTS.md](AGENTS.md) | AI Agent 协作准则、代码规范 |
+| 文档类型     | 文档名称                             | 说明                         |
+| ------------ | ------------------------------------ | ---------------------------- |
+| **核心文档** | [核心需求.md](核心需求.md)           | 详细需求、技术约束、命名规范 |
+| **用户文档** | [环境搭建](docs/setup.md)            | 虚拟环境、依赖安装、故障排查 |
+|              | [CLI 使用](docs/cli.md)              | 命令详解、参数说明、工作流程 |
+|              | [GPT-Load 接口](docs/gptload-api.md) | API 接口对比和配置说明       |
+| **开发文档** | [开发路线图](docs/NEXT_STEPS.md)     | 当前状态、优先级、技术选型   |
+|              | [技术决策](docs/decisions.md)        | 架构选型、接口决策、实现原理 |
+| **测试文档** | [测试指南](docs/testing-guide.md)    | 自动化与手工测试清单         |
+| **协作规范** | [AGENTS.md](AGENTS.md)               | AI Agent 协作准则、代码规范  |
 
 完整文档索引: [docs/README.md](docs/README.md)
 

@@ -166,7 +166,7 @@ class InteractiveCLI:
 
             # 转录（如果需要）
             console.print("\n[bold yellow]━━━ 步骤 2/4: 音频转录 (跳过) ━━━[/]")
-            transcript = pipeline.extract_transcript(self.settings, video_path)
+            transcript = await pipeline.extract_transcript(self.settings, video_path)
             if transcript:
                 console.print(f"  ✓ 转录长度: {len(transcript)} 字符")
             else:

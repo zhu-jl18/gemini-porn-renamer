@@ -28,13 +28,14 @@ def command(
     n: int = typer.Option(5, "--candidates", "-n", min=1, max=10, help="候选数量"),
     dry_run: bool = typer.Option(False, "--dry-run", help="预览模式，不实际改名"),
     styles: Optional[str] = typer.Option(None, "--styles", help="命名风格（逗号分隔）"),
+    non_interactive: bool = typer.Option(False, "--non-interactive", help="测试模式：自动选择序号 1，无需交互"),
 ):
     """处理单个视频文件 - 分析并生成命名候选."""
-    asyncio.run(_run_async(video, n, dry_run, styles))
+    asyncio.run(_run_async(video, n, dry_run, styles, non_interactive))
 
 
 async def _run_async(
-    video: Path, n: int, dry_run: bool, styles: Optional[str]
+    video: Path, n: int, dry_run: bool, styles: Optional[str], non_interactive: bool
 ):
     """异步执行单视频处理."""
     # 加载配置
@@ -110,14 +111,16 @@ async def _run_async(
     console.print(table)
 
     # 用户选择
-    choice = typer.prompt(
-        f"\n选择一个序号 (1-{len(candidates)})，或 0 跳过", default="0"
-    )
-
-    try:
-        ci = int(choice)
-    except ValueError:
-        ci = 0
+    if non_interactive:
+        ci = 1 if len(candidates) > 0 else 0
+    else:
+        choice = typer.prompt(
+            f"\n选择一个序号 (1-{len(candidates)})，或 0 跳过", default="0"
+        )
+        try:
+            ci = int(choice)
+        except ValueError:
+            ci = 0
 
     if ci < 1 or ci > len(candidates):
         console.print("[yellow]已跳过改名[/]")
