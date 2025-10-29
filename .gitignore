@@ -87,3 +87,6 @@ pip-delete-this-directory.txt
 .env.*.local
 
 
+
+# Internal tool cache (keep ignored)
+.giga/
